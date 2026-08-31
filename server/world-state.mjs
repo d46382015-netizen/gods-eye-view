@@ -77,7 +77,60 @@ const server = createServer(async (req, res) => {
         events: store.listEvents({
           entityId: url.searchParams.get('entityId') || undefined,
           type: url.searchParams.get('type') || undefined,
+          since: url.searchParams.get('since') || undefined,
+          until: url.searchParams.get('until') || undefined,
           limit: url.searchParams.get('limit') || 500,
+        }),
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/cyvx/observations') {
+      return json(res, 200, {
+        observations: store.listObservations({
+          entityId: url.searchParams.get('entityId') || undefined,
+          source: url.searchParams.get('source') || undefined,
+          since: url.searchParams.get('since') || undefined,
+          until: url.searchParams.get('until') || undefined,
+          limit: url.searchParams.get('limit') || 500,
+        }),
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/cyvx/timeline') {
+      return json(res, 200, {
+        timeline: store.timeline({
+          entityId: url.searchParams.get('entityId') || undefined,
+          type: url.searchParams.get('type') || undefined,
+          since: url.searchParams.get('since') || undefined,
+          until: url.searchParams.get('until') || undefined,
+          limit: url.searchParams.get('limit') || 1000,
+        }),
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/api/cyvx/entities/')) {
+      const entityId = decodeURIComponent(
+        url.pathname.slice('/api/cyvx/entities/'.length),
+      );
+
+      return json(res, 200, store.entityHistory(entityId, {
+        since: url.searchParams.get('since') || undefined,
+        until: url.searchParams.get('until') || undefined,
+        limit: url.searchParams.get('limit') || 5000,
+      }));
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/api/cyvx/trajectory/')) {
+      const entityId = decodeURIComponent(
+        url.pathname.slice('/api/cyvx/trajectory/'.length),
+      );
+
+      return json(res, 200, {
+        entityId,
+        trajectory: store.trajectory(entityId, {
+          since: url.searchParams.get('since') || undefined,
+          until: url.searchParams.get('until') || undefined,
+          limit: url.searchParams.get('limit') || 5000,
         }),
       });
     }
