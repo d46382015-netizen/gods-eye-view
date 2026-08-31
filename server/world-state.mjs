@@ -58,7 +58,7 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/cyxv/health') {
+    if (req.method === 'GET' && url.pathname === '/api/cyvx/health') {
       return json(res, 200, store.stats());
     }
 
