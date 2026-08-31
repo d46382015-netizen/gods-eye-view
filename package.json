@@ -45,7 +45,9 @@
     "cyvx:fusion": "node server/fusion.mjs",
     "test:cyvx:fusion": "node tests/cyvx-fusion.test.mjs",
     "cyvx:anomaly": "node server/anomaly.mjs",
-    "test:cyvx:anomaly": "node tests/cyvx-anomaly.test.mjs"
+    "test:cyvx:anomaly": "node tests/cyvx-anomaly.test.mjs",
+    "cyvx:intelligence": "node server/intelligence.mjs",
+    "test:cyvx:intelligence": "node tests/cyvx-intelligence.test.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
