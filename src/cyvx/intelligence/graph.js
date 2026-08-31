@@ -1,25 +1,29 @@
 export class UnifiedIntelligenceGraph {
   constructor({ store, fusion, anomaly }) {
-    if (!store) throw new Error('UnifiedIntelligenceGraph requires store');
-    if (!fusion) throw new Error('UnifiedIntelligenceGraph requires fusion');
-    if (!anomaly) throw new Error('UnifiedIntelligenceGraph requires anomaly');
+    if (!store) throw new Error('store required');
+    if (!fusion) throw new Error('fusion required');
+    if (!anomaly) throw new Error('anomaly required');
 
     this.store = store;
     this.fusion = fusion;
     this.anomaly = anomaly;
   }
 
+  trajectory(id) {
+    if (typeof this.store.trajectory !== 'function') return [];
+
+    return this.store.trajectory(id, { limit: 5000 });
+  }
+
   fusionFindingsFor(id) {
     if (typeof this.fusion.listFindings !== 'function') return [];
 
-    return this.fusion.listFindings({ limit: 5000 })
-      .filter((finding) => {
-        const entities = Array.isArray(finding.entities)
-          ? finding.entities
-          : [];
-
-        return entities.some((entity) => entity.id === id);
-      });
+    return this.fusion
+      .listFindings({ limit: 5000 })
+      .filter((finding) =>
+        Array.isArray(finding.entities) &&
+        finding.entities.some((entity) => entity.id === id)
+      );
   }
 
   anomalyFindingsFor(id) {
@@ -27,28 +31,19 @@ export class UnifiedIntelligenceGraph {
 
     return this.anomaly.listFindings({
       entityId: id,
-      limit: 5000,
-    });
-  }
-
-  trajectory(id) {
-    if (typeof this.store.trajectory !== 'function') return [];
-
-    return this.store.trajectory(id, {
-      limit: 5000,
+      limit: 5000
     });
   }
 
   entity(id) {
     const entity = this.store.getEntity(id);
-
     if (!entity) return null;
 
     const trajectory = this.trajectory(id);
 
     const events = this.store.listEvents({
       entityId: id,
-      limit: 5000,
+      limit: 5000
     });
 
     const fusionFindings = this.fusionFindingsFor(id);
@@ -57,11 +52,7 @@ export class UnifiedIntelligenceGraph {
     const relationships = [];
 
     for (const finding of fusionFindings) {
-      const entities = Array.isArray(finding.entities)
-        ? finding.entities
-        : [];
-
-      for (const related of entities) {
+      for (const related of finding.entities || []) {
         if (related.id === id) continue;
 
         relationships.push({
@@ -71,8 +62,10 @@ export class UnifiedIntelligenceGraph {
             finding.relationship ||
             finding.type ||
             'related',
-          confidence: finding.confidence ?? null,
-          evidence: finding.evidence || {},
+          confidence:
+            finding.confidence ?? null,
+          evidence:
+            finding.evidence || {}
         });
       }
     }
@@ -90,61 +83,57 @@ export class UnifiedIntelligenceGraph {
         events: events.length,
         relationships: relationships.length,
         fusionFindings: fusionFindings.length,
-        anomalies: anomalies.length,
-      },
+        anomalies: anomalies.length
+      }
     };
   }
 
   search(query = '', options = {}) {
-    const normalized = String(query || '')
-      .trim()
-      .toLowerCase();
+    const q = String(query).trim().toLowerCase();
 
-    const entities = this.store.listEntities({
-      type: options.type || undefined,
-      source: options.source || undefined,
-      limit: 5000,
-    });
-
-    return entities
+    return this.store
+      .listEntities({
+        type: options.type || undefined,
+        source: options.source || undefined,
+        limit: 5000
+      })
       .filter((entity) => {
-        if (!normalized) return true;
+        if (!q) return true;
 
-        const haystack = [
+        return [
           entity.id,
           entity.type,
           entity.source,
           entity.sourceId,
-          JSON.stringify(entity.attributes || {}),
-        ].join(' ').toLowerCase();
-
-        return haystack.includes(normalized);
+          JSON.stringify(entity.attributes || {})
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
       })
-      .slice(
-        0,
-        Math.max(
-          1,
-          Math.min(Number(options.limit) || 100, 1000),
-        ),
-      );
+      .slice(0, Math.min(
+        Math.max(Number(options.limit) || 100, 1),
+        1000
+      ));
   }
 
   nearby(latitude, longitude, options = {}) {
     const lat = Number(latitude);
     const lon = Number(longitude);
     const radiusKm = Math.max(
-      0,
       Number(options.radiusKm) || 50,
+      0
     );
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      throw new Error('latitude and longitude must be numeric');
+      throw new Error(
+        'latitude and longitude must be numeric'
+      );
     }
 
-    const toRadians = (value) =>
-      value * Math.PI / 180;
+    const radians = (x) => x * Math.PI / 180;
 
-    const distance = (a, b) => {
+    const haversine = (a, b) => {
       if (!a?.position || !b?.position) return null;
 
       const lat1 = Number(a.position.latitude);
@@ -160,99 +149,102 @@ export class UnifiedIntelligenceGraph {
       ) return null;
 
       const R = 6371;
-      const dLat = toRadians(lat2 - lat1);
-      const dLon = toRadians(lon2 - lon1);
+      const dLat = radians(lat2 - lat1);
+      const dLon = radians(lon2 - lon1);
 
       const h =
         Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRadians(lat1)) *
-        Math.cos(toRadians(lat2)) *
+        Math.cos(radians(lat1)) *
+        Math.cos(radians(lat2)) *
         Math.sin(dLon / 2) ** 2;
 
       return 2 * R * Math.asin(
-        Math.sqrt(Math.min(1, h)),
+        Math.sqrt(Math.min(1, h))
       );
     };
 
     const center = {
       position: {
         latitude: lat,
-        longitude: lon,
-      },
+        longitude: lon
+      }
     };
 
-    return this.store.listEntities({
-      type: options.type || undefined,
-      source: options.source || undefined,
-      limit: 5000,
-    })
+    return this.store
+      .listEntities({
+        type: options.type || undefined,
+        source: options.source || undefined,
+        limit: 5000
+      })
       .map((entity) => ({
         ...entity,
-        distanceKm: distance(center, entity),
+        distanceKm: haversine(center, entity)
       }))
       .filter((entity) =>
         entity.distanceKm !== null &&
-        entity.distanceKm <= radiusKm,
+        entity.distanceKm <= radiusKm
       )
       .sort((a, b) =>
-        a.distanceKm - b.distanceKm,
+        a.distanceKm - b.distanceKm
       )
       .slice(
         0,
-        Math.max(
-          1,
-          Math.min(Number(options.limit) || 100, 1000),
-        ),
+        Math.min(
+          Math.max(Number(options.limit) || 100, 1),
+          1000
+        )
       )
       .map((entity) => ({
         ...entity,
         distanceKm: Number(
-          entity.distanceKm.toFixed(3),
-        ),
+          entity.distanceKm.toFixed(3)
+        )
       }));
   }
 
   timeline(id, options = {}) {
     const entity = this.store.getEntity(id);
-
     if (!entity) return null;
 
     const events = this.store.listEvents({
       entityId: id,
-      limit: 5000,
+      limit: 5000
     });
 
     const observations = this.trajectory(id);
     const anomalies = this.anomalyFindingsFor(id);
     const fusion = this.fusionFindingsFor(id);
 
-    const items = [
+    const timeline = [
       ...events.map((event) => ({
         timestamp: event.observedAt,
         kind: 'event',
         id: event.id,
         type: event.type,
         confidence: event.confidence,
-        data: event,
+        data: event
       })),
 
       ...observations.map((observation, index) => ({
         timestamp: observation.observedAt,
         kind: 'observation',
-        id: `${id}:observation:${index}:${observation.observedAt}`,
+        id: `${id}:observation:${index}`,
         type: 'observation',
         confidence: observation.confidence,
-        data: observation,
+        data: observation
       })),
 
       ...anomalies.map((finding) => ({
-        timestamp: finding.observedAt,
+        timestamp:
+          finding.observedAt ||
+          finding.createdAt ||
+          entity.observedAt,
         kind: 'anomaly',
         id: finding.id,
         type: finding.type,
         severity: finding.severity,
         confidence: finding.confidence,
-        data: finding,
+        data: finding
       })),
 
       ...fusion.map((finding) => ({
@@ -267,29 +259,29 @@ export class UnifiedIntelligenceGraph {
           finding.type ||
           'relationship',
         confidence: finding.confidence,
-        data: finding,
-      })),
+        data: finding
+      }))
     ];
 
-    return items
+    return timeline
       .filter((item) =>
-        Number.isFinite(Date.parse(item.timestamp)),
+        Number.isFinite(Date.parse(item.timestamp))
       )
       .sort((a, b) =>
         Date.parse(a.timestamp) -
-        Date.parse(b.timestamp),
+        Date.parse(b.timestamp)
       )
       .slice(
-        -Math.max(
-          1,
-          Math.min(Number(options.limit) || 500, 5000),
-        ),
+        -Math.min(
+          Math.max(Number(options.limit) || 500, 1),
+          5000
+        )
       );
   }
 
   overview() {
     const entities = this.store.listEntities({
-      limit: 5000,
+      limit: 5000
     });
 
     const fusionFindings =
@@ -321,24 +313,24 @@ export class UnifiedIntelligenceGraph {
       byType,
       bySource,
       fusion: {
-        findings: fusionFindings.length,
+        findings: fusionFindings.length
       },
       anomalies: {
         findings: anomalies.length,
         critical: anomalies.filter(
-          (x) => x.severity === 'critical',
+          (x) => x.severity === 'critical'
         ).length,
         high: anomalies.filter(
-          (x) => x.severity === 'high',
+          (x) => x.severity === 'high'
         ).length,
         medium: anomalies.filter(
-          (x) => x.severity === 'medium',
+          (x) => x.severity === 'medium'
         ).length,
         low: anomalies.filter(
-          (x) => x.severity === 'low',
-        ).length,
+          (x) => x.severity === 'low'
+        ).length
       },
-      worldState: this.store.stats(),
+      worldState: this.store.stats()
     };
   }
 }

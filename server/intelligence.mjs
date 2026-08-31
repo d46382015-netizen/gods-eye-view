@@ -2,71 +2,54 @@ import { createServer } from 'node:http';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import * as WorldStateModule from '../src/cyvx/world-state/store.js';
-import * as FusionModule from '../src/cyvx/fusion/engine.js';
-import * as AnomalyModule from '../src/cyvx/anomaly/engine.js';
+import * as WorldState from '../src/cyvx/world-state/store.js';
+import * as Fusion from '../src/cyvx/fusion/engine.js';
+import * as Anomaly from '../src/cyvx/anomaly/engine.js';
 
-import { UnifiedIntelligenceGraph } from '../src/cyvx/intelligence/graph.js';
+import {
+  UnifiedIntelligenceGraph
+} from '../src/cyvx/intelligence/graph.js';
 
-const pickClass = (module, patterns) => {
-  for (const pattern of patterns) {
-    const found = Object.entries(module)
-      .find(([name, value]) =>
-        typeof value === 'function' &&
-        pattern.test(name),
-      );
-
-    if (found) return found[1];
+const findExport = (module, names) => {
+  for (const name of names) {
+    if (typeof module[name] === 'function') {
+      return module[name];
+    }
   }
 
-  return null;
+  throw new Error(
+    `Missing expected export: ${names.join(', ')}. ` +
+    `Available: ${Object.keys(module).join(', ')}`
+  );
 };
 
-const WorldStateStore = pickClass(
-  WorldStateModule,
-  [/WorldStateStore/i],
+const WorldStateStore = findExport(
+  WorldState,
+  ['WorldStateStore']
 );
 
-const FusionEngine = pickClass(
-  FusionModule,
-  [/IntelligenceFusionEngine/i, /^FusionEngine$/i],
+const FusionEngine = findExport(
+  Fusion,
+  ['IntelligenceFusionEngine', 'FusionEngine']
 );
 
-const AnomalyEngine = pickClass(
-  AnomalyModule,
-  [/AnomalyEngine/i],
+const AnomalyEngine = findExport(
+  Anomaly,
+  ['AnomalyEngine']
 );
-
-if (!WorldStateStore) {
-  throw new Error(
-    `Could not find WorldStateStore. Exports: ${Object.keys(WorldStateModule).join(', ')}`,
-  );
-}
-
-if (!FusionEngine) {
-  throw new Error(
-    `Could not find Fusion Engine. Exports: ${Object.keys(FusionModule).join(', ')}`,
-  );
-}
-
-if (!AnomalyEngine) {
-  throw new Error(
-    `Could not find Anomaly Engine. Exports: ${Object.keys(AnomalyModule).join(', ')}`,
-  );
-}
 
 const port = Number(
-  process.env.CYVX_INTELLIGENCE_PORT || 8790,
+  process.env.CYVX_INTELLIGENCE_PORT || 8790
 );
 
 const dataDir = resolve(
-  process.env.CYVX_DATA_DIR || './data/cyvx',
+  process.env.CYVX_DATA_DIR || './data/cyvx'
 );
 
 await mkdir(dataDir, { recursive: true });
 
 const store = await new WorldStateStore(
-  resolve(dataDir, 'world-state.json'),
+  resolve(dataDir, 'world-state.json')
 ).load();
 
 const fusion = new FusionEngine({ store });
@@ -75,10 +58,10 @@ const anomaly = new AnomalyEngine({ store });
 const graph = new UnifiedIntelligenceGraph({
   store,
   fusion,
-  anomaly,
+  anomaly
 });
 
-function json(res, status, payload) {
+function send(res, status, payload) {
   res.writeHead(status, {
     'content-type':
       'application/json; charset=utf-8',
@@ -87,7 +70,7 @@ function json(res, status, payload) {
     'access-control-allow-methods':
       'GET,POST,OPTIONS',
     'access-control-allow-headers':
-      'content-type',
+      'content-type'
   });
 
   res.end(JSON.stringify(payload));
@@ -97,7 +80,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(
       req.url,
-      `http://${req.headers.host || 'localhost'}`,
+      `http://${req.headers.host || '127.0.0.1'}`
     );
 
     if (req.method === 'OPTIONS') {
@@ -106,7 +89,7 @@ const server = createServer(async (req, res) => {
         'access-control-allow-methods':
           'GET,POST,OPTIONS',
         'access-control-allow-headers':
-          'content-type',
+          'content-type'
       });
 
       return res.end();
@@ -117,18 +100,18 @@ const server = createServer(async (req, res) => {
       url.pathname ===
         '/api/cyvx/intelligence/health'
     ) {
-      return json(res, 200, {
+      return send(res, 200, {
         status: 'ok',
         service: 'unified-intelligence-graph',
         worldState: store.stats(),
         fusion:
           typeof fusion.stats === 'function'
             ? fusion.stats()
-            : { status: 'ok' },
+            : {},
         anomaly:
           typeof anomaly.stats === 'function'
             ? anomaly.stats()
-            : { status: 'ok' },
+            : {}
       });
     }
 
@@ -137,7 +120,7 @@ const server = createServer(async (req, res) => {
       url.pathname ===
         '/api/cyvx/intelligence/overview'
     ) {
-      return json(res, 200, graph.overview());
+      return send(res, 200, graph.overview());
     }
 
     if (
@@ -145,7 +128,7 @@ const server = createServer(async (req, res) => {
       url.pathname ===
         '/api/cyvx/intelligence/search'
     ) {
-      return json(res, 200, {
+      return send(res, 200, {
         results: graph.search(
           url.searchParams.get('q') || '',
           {
@@ -156,9 +139,9 @@ const server = createServer(async (req, res) => {
               url.searchParams.get('source') ||
               undefined,
             limit:
-              url.searchParams.get('limit') || 100,
-          },
-        ),
+              url.searchParams.get('limit') || 100
+          }
+        )
       });
     }
 
@@ -175,13 +158,13 @@ const server = createServer(async (req, res) => {
 
       if (latitude === null ||
           longitude === null) {
-        return json(res, 400, {
+        return send(res, 400, {
           error:
-            'latitude and longitude are required',
+            'latitude and longitude are required'
         });
       }
 
-      return json(res, 200, {
+      return send(res, 200, {
         results: graph.nearby(
           latitude,
           longitude,
@@ -195,9 +178,9 @@ const server = createServer(async (req, res) => {
               url.searchParams.get('source') ||
               undefined,
             limit:
-              url.searchParams.get('limit') || 100,
-          },
-        ),
+              url.searchParams.get('limit') || 100
+          }
+        )
       });
     }
 
@@ -213,23 +196,27 @@ const server = createServer(async (req, res) => {
 
       if (remainder.endsWith('/timeline')) {
         const id = decodeURIComponent(
-          remainder.slice(0, -'/timeline'.length),
+          remainder.slice(
+            0,
+            -'/timeline'.length
+          )
         );
 
-        const timeline = graph.timeline(id, {
-          limit:
-            url.searchParams.get('limit') || 500,
-        });
+        const timeline =
+          graph.timeline(id, {
+            limit:
+              url.searchParams.get('limit') || 500
+          });
 
         if (!timeline) {
-          return json(res, 404, {
-            error: 'Entity not found',
+          return send(res, 404, {
+            error: 'Entity not found'
           });
         }
 
-        return json(res, 200, {
+        return send(res, 200, {
           entityId: id,
-          timeline,
+          timeline
         });
       }
 
@@ -237,33 +224,37 @@ const server = createServer(async (req, res) => {
       const result = graph.entity(id);
 
       if (!result) {
-        return json(res, 404, {
-          error: 'Entity not found',
+        return send(res, 404, {
+          error: 'Entity not found'
         });
       }
 
-      return json(res, 200, result);
+      return send(res, 200, result);
     }
 
-    return json(res, 404, {
-      error: 'Not found',
+    return send(res, 404, {
+      error: 'Not found'
     });
   } catch (error) {
     console.error(
-      `[CYVX][intelligence] ${error.stack || error}`,
+      `[CYVX][intelligence] ${error.stack || error}`
     );
 
-    return json(res, 400, {
-      error: error.message || 'Request failed',
+    return send(res, 500, {
+      error: error.message || 'Internal error'
     });
   }
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.info(
-    `[CYVX][intelligence] listening on http://127.0.0.1:${port}`,
-  );
-});
+server.listen(
+  port,
+  '127.0.0.1',
+  () => {
+    console.log(
+      `[CYVX][intelligence] listening on 127.0.0.1:${port}`
+    );
+  }
+);
 
 const shutdown = () => {
   server.close(() => process.exit(0));
