@@ -39,7 +39,9 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
-    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
+    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "cyvx:world-state": "node server/world-state.mjs",
+    "test:cyvx": "node tests/cyvx-world-state.test.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
