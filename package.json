@@ -41,7 +41,11 @@
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "cyvx:world-state": "node server/world-state.mjs",
-    "test:cyvx": "node tests/cyvx-world-state.test.mjs && node tests/cyvx-bridge.test.mjs"
+    "test:cyvx": "node tests/cyvx-world-state.test.mjs && node tests/cyvx-bridge.test.mjs",
+    "cyvx:fusion": "node server/fusion.mjs",
+    "test:cyvx:fusion": "node tests/cyvx-fusion.test.mjs",
+    "cyvx:anomaly": "node server/anomaly.mjs",
+    "test:cyvx:anomaly": "node tests/cyvx-anomaly.test.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
